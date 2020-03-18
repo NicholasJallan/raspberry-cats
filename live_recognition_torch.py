@@ -68,22 +68,21 @@ if cap.isOpened():
     window_handle = cv2.namedWindow("CSI Camera", cv2.WINDOW_AUTOSIZE)
     # Window
     while cv2.getWindowProperty("CSI Camera", 0) >= 0:
-	    ret_val, img = cap.read()
-    	cv2.imshow("CSI Camera", img)
-	    input_tensor = transform(Image.fromarray(img))
-    	input_batch = input_tensor.unsqueeze(0)  # create a mini-batch as expected by the model
-    	input_batch = input_batch.to(device)
-    	with torch.no_grad():
-	    	output = model(input_batch)
+        ret_val, img = cap.read()
+        cv2.imshow("CSI Camera", img)
+        input_tensor = transform(Image.fromarray(img))
+        input_batch = input_tensor.unsqueeze(0)  # create a mini-batch as expected by the model
+        input_batch = input_batch.to(device)
+        with torch.no_grad():
+            output = model(input_batch)
 
         print(output)
-	    softmax = torch.nn.functional.softmax(output[0], dim=0)
-    	pred = classes[np.argmax(softmax.cpu()).item()]
+        softmax = torch.nn.functional.softmax(output[0], dim=0)
+        pred = classes[np.argmax(softmax.cpu()).item()]
+        print(pred)
 
-    	print(pred)
-        
-    	# update the FPS counter
-	    fps.update()
+        # update the FPS counter
+        fps.update()
         
         # This also acts as
         keyCode = cv2.waitKey(30) & 0xFF
