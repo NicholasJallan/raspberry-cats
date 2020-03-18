@@ -1,12 +1,5 @@
-# USAGE
-# python pi_face_recognition.py --cascade haarcascade_frontalface_default.xml --encodings encodings.pickle
-
-# import the necessary packages
 from imutils.video import VideoStream
 from imutils.video import FPS
-#from keras.applications import imagenet_utils
-
-#import face_recognition
 import imutils
 import time
 import cv2
@@ -33,50 +26,78 @@ transform = transforms.Compose([
             normalize
         ])
 
-# initialize the video stream and allow the camera sensor to warm up
-print("[INFO] starting video stream...")
-vs = VideoStream(src=0).start()
-# vs = VideoStream(usePiCamera=True).start()
-time.sleep(2.0)
+def gstreamer_pipeline(
+    capture_width=1280,
+    capture_height=720,
+    display_width=1280,
+    display_height=720,
+    framerate=60,
+    flip_method=0,
+):
+    return (
+        "nvarguscamerasrc ! "
+        "video/x-raw(memory:NVMM), "
+        "width=(int)%d, height=(int)%d, "
+        "format=(string)NV12, framerate=(fraction)%d/1 ! "
+        "nvvidconv flip-method=%d ! "
+        "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
+        "videoconvert ! "
+        "video/x-raw, format=(string)BGR ! appsink"
+        % (
+            capture_width,
+            capture_height,
+            framerate,
+            flip_method,
+            display_width,
+            display_height,
+        )
+    )
 
 # start the FPS counter
 fps = FPS().start()
 
 classes = ("Billy", "Maya", "Nara", "Neko")
 
-# loop over frames from the video file stream
+# initialize the video stream and allow the camera sensor to warm up
+print("[INFO] starting video stream...")
 
-current_cat = None
-while True:
-	frame = vs.read()
-	img = Image.fromarray(frame)
-	input_tensor = transform(img)
-	input_batch = input_tensor.unsqueeze(0)  # create a mini-batch as expected by the model
-	input_batch = input_batch.to(device)
-	with torch.no_grad():
-		output = model(input_batch)
+# To flip the image, modify the flip_method parameter (0 and 2 are the most common)
+print(gstreamer_pipeline(flip_method=0))
+cap = cv2.VideoCapture(gstreamer_pipeline(flip_method=0), cv2.CAP_GSTREAMER)
+if cap.isOpened():
+    window_handle = cv2.namedWindow("CSI Camera", cv2.WINDOW_AUTOSIZE)
+    # Window
+    while cv2.getWindowProperty("CSI Camera", 0) >= 0:
+	    ret_val, img = cap.read()
+    	cv2.imshow("CSI Camera", img)
+	    input_tensor = transform(Image.fromarray(img))
+    	input_batch = input_tensor.unsqueeze(0)  # create a mini-batch as expected by the model
+    	input_batch = input_batch.to(device)
+    	with torch.no_grad():
+	    	output = model(input_batch)
 
-	softmax = torch.nn.functional.softmax(output[0], dim=0)
-	pred = classes[np.argmax(softmax.cpu()).item()]
+        print(output)
+	    softmax = torch.nn.functional.softmax(output[0], dim=0)
+    	pred = classes[np.argmax(softmax.cpu()).item()]
 
-	print(pred)
+    	print(pred)
+        
+    	# update the FPS counter
+	    fps.update()
+        
+        # This also acts as
+        keyCode = cv2.waitKey(30) & 0xFF
+        # Stop the program on the ESC key
+        if keyCode == 27:
+            break
+    cap.release()
+    cv2.destroyAllWindows()
+else:
+    print("Unable to open camera")
 
-	# display the image to our screen
-	cv2.imshow("Frame", frame)
-	key = cv2.waitKey(1) & 0xFF
-
-	# if the `q` key was pressed, break from the loop
-	if key == ord("q"):
-		break
-
-	# update the FPS counter
-	fps.update()
 
 # stop the timer and display FPS information
 fps.stop()
 print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
 print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
 
-# do a bit of cleanup
-cv2.destroyAllWindows()
-vs.stop()
